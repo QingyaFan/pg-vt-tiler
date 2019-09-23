@@ -3,7 +3,9 @@ package generator
 import "testing"
 
 func TestGenerateTile(t *testing.T) {
-	getDataExtent(`water`, `geom`)
+	// generateTile(8, 208, 100, `water`, `geom`) // 0.5s
+	generateTile(7, 106, 46, `water`, `geom`) // 1.8s
+	// generateTile(6, 52, 24, `water`, `geom`)  // 58s
 }
 
 func TestBoxToArray(t *testing.T) {

@@ -1,20 +1,12 @@
 package main
 
 import (
-	"pg-vt-tiler/engine"
-
-	_ "github.com/lib/pq"
-)
-
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "postgres"
-	password = "cheerfun"
-	dbname   = "g-default"
+	"fmt"
+	
+	"pg-vt-tiler/generator"
 )
 
 // accept table name and geometry column name
 func main() {
-	engine.GenerateTile()
+	fmt.Println("test")
 }
