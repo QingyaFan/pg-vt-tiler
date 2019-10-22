@@ -32,6 +32,7 @@ var (
 	geometryName   string
 	startZoomLevel int
 	endZoomLevel   int
+	tileLocation   string
 	generatorCmd   = &cobra.Command{
 		Use: `pg-vt-tiler`,
 		Short: `pg-vt-tiler 是一个生成矢量瓦片数据集的工具，
@@ -47,7 +48,7 @@ var (
 				fmt.Println(`table和geom必须设定`)
 				os.Exit(1)
 			}
-			Generate(`water`, `geom`)
+			Generate(tableName, geometryName)
 		},
 		PreRun: func(cmd *cobra.Command, args []string) {
 			initDB(dsn)
@@ -56,12 +57,14 @@ var (
 )
 
 func init() {
+	dsnHint := `database connection info, format: "host=localhost port=5432 user=postgres password=postgres dbname=db_name sslmode=ssl_mode", required.`
 	cobra.OnInitialize(initConfig)
-	generatorCmd.PersistentFlags().StringVarP(&dsn, "dsn", "d", "", `database connection info, format: "host=localhost port=5432 user=postgres password=postgres dbname=db_name sslmode=ssl_mode", required.`)
+	generatorCmd.PersistentFlags().StringVarP(&dsn, "dsn", "d", "", dsnHint)
 	generatorCmd.PersistentFlags().IntVarP(&startZoomLevel, "start", "s", 7, "")
 	generatorCmd.PersistentFlags().IntVarP(&endZoomLevel, "end", "e", 7, "")
 	generatorCmd.PersistentFlags().StringVarP(&tableName, "table", "t", "", "")
 	generatorCmd.PersistentFlags().StringVarP(&geometryName, "geom", "g", "", "")
+	generatorCmd.PersistentFlags().StringVarP(&tileLocation, "tile-location", "l", ".", "")
 	generatorCmd.MarkFlagRequired("dsn")
 	generatorCmd.MarkFlagRequired("start")
 	generatorCmd.MarkFlagRequired("end")
@@ -163,7 +166,7 @@ func generateTile(z, x, y int, tableName, geom string) {
 		log.Fatal(err)
 	}
 
-	tileName := fmt.Sprintf(`/Volumes/Samsung_T5/tmp/%d.%d.%d.pbf`, z, x, y)
+	tileName := fmt.Sprintf(`%v/%d.%d.%d.pbf`, tileLocation, z, x, y)
 	err = ioutil.WriteFile(tileName, mvt, 0755)
 	if err != nil {
 		log.Fatal(err)
