@@ -30,6 +30,7 @@ var (
 	dsn            string
 	tableName      string
 	geometryName   string
+	concurrency    int
 	startZoomLevel int
 	endZoomLevel   int
 	tileLocation   string
@@ -64,7 +65,8 @@ func init() {
 	generatorCmd.PersistentFlags().IntVarP(&endZoomLevel, "end", "e", 7, "")
 	generatorCmd.PersistentFlags().StringVarP(&tableName, "table", "t", "", "")
 	generatorCmd.PersistentFlags().StringVarP(&geometryName, "geom", "g", "", "")
-	generatorCmd.PersistentFlags().StringVarP(&tileLocation, "tile-location", "l", ".", "")
+	generatorCmd.PersistentFlags().StringVarP(&tileLocation, "location", "l", ".", "")
+	generatorCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 10, "")
 	generatorCmd.MarkFlagRequired("dsn")
 	generatorCmd.MarkFlagRequired("start")
 	generatorCmd.MarkFlagRequired("end")
@@ -198,7 +200,7 @@ func Generate(tableName string, geom string) error {
 	}
 
 	// 对于每个切片，转换为坐标范围，并生成切片，写入文件
-	waitCh := make(chan [3]int)
+	waitCh := make(chan [3]int, concurrency)
 	for _, tile := range zxyRange {
 		go func(t [3]int) {
 			generateTile(t[0], t[1], t[2], tableName, geom)
