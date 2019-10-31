@@ -33,6 +33,7 @@ var (
 	concurrency    int
 	startZoomLevel int
 	endZoomLevel   int
+	maxOpenConns   int
 	tileLocation   string
 	generatorCmd   = &cobra.Command{
 		Use: `pg-vt-tiler`,
@@ -67,6 +68,7 @@ func init() {
 	generatorCmd.PersistentFlags().StringVarP(&geometryName, "geom", "g", "", "")
 	generatorCmd.PersistentFlags().StringVarP(&tileLocation, "location", "l", ".", "")
 	generatorCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 10, "")
+	generatorCmd.PersistentFlags().IntVarP(&maxOpenConns, "dbconns", "n", 50, "")
 	generatorCmd.MarkFlagRequired("dsn")
 	generatorCmd.MarkFlagRequired("start")
 	generatorCmd.MarkFlagRequired("end")
@@ -83,8 +85,8 @@ func initDB(dsn string) {
 	if err != nil {
 		log.Fatal(`database ping error`, err)
 	}
-	db.SetMaxOpenConns(50)
-	db.SetMaxIdleConns(5)
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(50)
 }
 
 // boxToArray postgis获取的box转为float64数组
@@ -168,10 +170,17 @@ func generateTile(z, x, y int, tableName, geom string) {
 		log.Fatal(err)
 	}
 
-	tileName := fmt.Sprintf(`%v/%d.%d.%d.pbf`, tileLocation, z, x, y)
+	tileName := fmt.Sprintf(`%v/%d/%d/%d.pbf`, tileLocation, z, x, y)
 	err = ioutil.WriteFile(tileName, mvt, 0755)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func createZoomLevelDirectoryStructure(zoomLevel int, startX, endX int) {
+	for i := startX; i <= endX; i++ {
+		pathName := fmt.Sprintf(`%v/%v/%v`, tileLocation, zoomLevel, i)
+		os.MkdirAll(pathName, 0755)
 	}
 }
 
@@ -191,6 +200,7 @@ func Generate(tableName string, geom string) error {
 		yMin := int(math.Floor((half - dataExtent[3]) / interval))
 		xMax := int(math.Floor((dataExtent[2] + half) / interval))
 		yMax := int(math.Floor((half - dataExtent[1]) / interval))
+		createZoomLevelDirectoryStructure(z, xMin, xMax)
 		for x := xMin; x <= xMax; x++ {
 			for y := yMin; y <= yMax; y++ {
 				zxyRange = append(zxyRange, [3]int{z, x, y})
