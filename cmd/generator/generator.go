@@ -11,82 +11,113 @@ import (
 	"strconv"
 	"strings"
 
-	// pq
 	_ "github.com/lib/pq"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
+type generateConfig struct {
+	DSN            string
+	StartZoomLevel int
+	EndZoomLevel   int
+	MaxOpenConns   int
+	TableName      string
+	GeometryName   string
+	Concurrency    int
+	TileLocation   string
+}
+
 const (
-	tileSize = 256
-	half     = 20037508.342789244
+	tileSize  = 256
+	half      = 20037508.342789244
+	shortDesc = "pg-vt-tiler is a tool that generate vector tiles, suppose original data from postgresql/postgis"
 )
 
 var (
-	db             *sql.DB
-	err            interface{}
-	cfgFile        string
-	dsn            string
-	tableName      string
-	geometryName   string
-	concurrency    int
-	startZoomLevel int
-	endZoomLevel   int
-	maxOpenConns   int
-	tileLocation   string
-	generatorCmd   = &cobra.Command{
-		Use: `pg-vt-tiler`,
-		Short: `pg-vt-tiler 是一个生成矢量瓦片数据集的工具，
-数据源是PostgreSQL中存储的矢量数据。`,
-		Run: func(cmd *cobra.Command, args []string) {
-			// TODO: 检查dsn格式
-			// TODO: 检查start和end的范围，并保证start<=end
-			if dsn == "" {
-				fmt.Println(`dsn必须设定`)
-				os.Exit(1)
-			}
-			if tableName == "" || geometryName == "" {
-				fmt.Println(`table和geom必须设定`)
-				os.Exit(1)
-			}
-			Generate(tableName, geometryName)
-		},
-		PreRun: func(cmd *cobra.Command, args []string) {
-			initDB(dsn)
-		},
-	}
+	cfg     generateConfig
+	db      *sql.DB
+	err     interface{}
+	cfgFile string
 )
 
-func init() {
-	dsnHint := `database connection info, format: "host=localhost port=5432 user=postgres password=postgres dbname=db_name sslmode=ssl_mode", required.`
-	cobra.OnInitialize(initConfig)
-	generatorCmd.PersistentFlags().StringVarP(&dsn, "dsn", "d", "", dsnHint)
-	generatorCmd.PersistentFlags().IntVarP(&startZoomLevel, "start", "s", 7, "")
-	generatorCmd.PersistentFlags().IntVarP(&endZoomLevel, "end", "e", 7, "")
-	generatorCmd.PersistentFlags().StringVarP(&tableName, "table", "t", "", "")
-	generatorCmd.PersistentFlags().StringVarP(&geometryName, "geom", "g", "", "")
-	generatorCmd.PersistentFlags().StringVarP(&tileLocation, "location", "l", ".", "")
-	generatorCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 10, "")
-	generatorCmd.PersistentFlags().IntVarP(&maxOpenConns, "dbconns", "n", 50, "")
-	generatorCmd.MarkFlagRequired("dsn")
-	generatorCmd.MarkFlagRequired("start")
-	generatorCmd.MarkFlagRequired("end")
-	generatorCmd.MarkFlagRequired("table")
-	generatorCmd.MarkFlagRequired("geom")
+var generatorCmd = &cobra.Command{
+	Use:   `pg-vt-tiler`,
+	Short: shortDesc,
+	Run: func(cmd *cobra.Command, args []string) {
+		// TODO: check dsn string format
+		// TODO: assurance start <= end
+		if cfg.DSN == "" {
+			log.Fatalln(`dsn should not be empty.`)
+		}
+		if cfg.TableName == "" {
+			log.Fatalln("table must be set.")
+		}
+		if cfg.GeometryName == "" {
+			log.Fatalln("geom column name in table must be set.")
+		}
+		err := Generate(cfg.TableName, cfg.GeometryName)
+		if err != nil {
+			fmt.Printf("Error generate tiles, err: %v \n", err)
+		}
+	},
+	PreRun: func(cmd *cobra.Command, args []string) {
+		initDB(cfg.DSN)
+	},
 }
 
 func initDB(dsn string) {
 	db, err = sql.Open("postgres", dsn)
 	if err != nil {
-		log.Fatal(`database open error`, err)
+		log.Fatalf(`database open err: %v \n`, err)
 	}
 	err = db.Ping()
 	if err != nil {
-		log.Fatal(`database ping error`, err)
+		log.Fatalf(`database ping err: %v \n`, err)
 	}
-	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
 	db.SetMaxIdleConns(50)
+}
+
+func initConfig() {
+	if cfgFile != "" {
+		viper.SetConfigFile(cfgFile)
+	} else {
+		home, err := homedir.Dir()
+		if err != nil {
+			log.Fatalf(`home-dir error: %v \n`, err)
+		}
+		viper.AddConfigPath(home)
+		viper.SetConfigName(".cobra")
+	}
+
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	}
+}
+
+func init() {
+	dsnHint := `database connection info, format: "host=localhost port=5432 user=postgres password=postgres dbname=db_name sslmode=ssl_mode", required.`
+
+	cobra.OnInitialize(initConfig)
+	generatorCmd.PersistentFlags().StringVarP(&cfg.DSN, "dsn", "d", "", dsnHint)
+	generatorCmd.PersistentFlags().IntVarP(&cfg.StartZoomLevel, "start", "s", 7, "")
+	generatorCmd.PersistentFlags().IntVarP(&cfg.EndZoomLevel, "end", "e", 7, "")
+	generatorCmd.PersistentFlags().StringVarP(&cfg.TableName, "table", "t", "", "")
+	generatorCmd.PersistentFlags().StringVarP(&cfg.GeometryName, "geom", "g", "", "")
+	generatorCmd.PersistentFlags().StringVarP(&cfg.TileLocation, "location", "l", ".", "")
+	generatorCmd.PersistentFlags().IntVarP(&cfg.Concurrency, "concurrency", "c", 10, "")
+	generatorCmd.PersistentFlags().IntVarP(&cfg.MaxOpenConns, "dbconns", "n", 50, "")
+
+	requiredFlags := []string{"dsn", "start", "end", "table", "geom"}
+	for _, flag := range requiredFlags {
+		err := generatorCmd.MarkPersistentFlagRequired(flag)
+		if err != nil {
+			log.Fatalf("Error marking flag %s as required, err: %v \n", flag, err)
+		}
+	}
 }
 
 // boxToArray postgis获取的box转为float64数组
@@ -170,7 +201,7 @@ func generateTile(z, x, y int, tableName, geom string) {
 		log.Fatal(err)
 	}
 
-	tileName := fmt.Sprintf(`%v/%d/%d/%d.pbf`, tileLocation, z, x, y)
+	tileName := fmt.Sprintf(`%v/%d/%d/%d.pbf`, cfg.TileLocation, z, x, y)
 	err = ioutil.WriteFile(tileName, mvt, 0755)
 	if err != nil {
 		log.Fatal(err)
@@ -179,7 +210,7 @@ func generateTile(z, x, y int, tableName, geom string) {
 
 func createZoomLevelDirectoryStructure(zoomLevel int, startX, endX int) {
 	for i := startX; i <= endX; i++ {
-		pathName := fmt.Sprintf(`%v/%v/%v`, tileLocation, zoomLevel, i)
+		pathName := fmt.Sprintf(`%v/%v/%v`, cfg.TileLocation, zoomLevel, i)
 		os.MkdirAll(pathName, 0755)
 	}
 }
@@ -194,7 +225,7 @@ func Generate(tableName string, geom string) error {
 	dataExtent := getDataExtent(tableName, geom)
 	var zxyRange [][3]int
 	total := 0
-	for z := startZoomLevel; z <= endZoomLevel; z++ {
+	for z := cfg.StartZoomLevel; z <= cfg.EndZoomLevel; z++ {
 		interval := half * 2 / math.Pow(2, float64(z))
 		xMin := int(math.Floor((dataExtent[0] + half) / interval))
 		yMin := int(math.Floor((half - dataExtent[3]) / interval))
@@ -210,7 +241,7 @@ func Generate(tableName string, geom string) error {
 	}
 
 	// 对于每个切片，转换为坐标范围，并生成切片，写入文件
-	waitCh := make(chan [3]int, concurrency)
+	waitCh := make(chan [3]int, cfg.Concurrency)
 	for _, tile := range zxyRange {
 		go func(t [3]int) {
 			generateTile(t[0], t[1], t[2], tableName, geom)
@@ -227,29 +258,10 @@ func Generate(tableName string, geom string) error {
 	return nil
 }
 
-func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(`home-dir error`, err)
-		}
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".cobra")
-	}
-
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
-}
-
 // Execute cobra的入口函数
 func Execute() {
-	if err := generatorCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	err := generatorCmd.Execute()
+	if err != nil {
+		log.Fatalf("generate tiles failed, err: %v \n", err)
 	}
 }

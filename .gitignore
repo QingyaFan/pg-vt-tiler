@@ -5,6 +5,7 @@
 *.so
 *.dylib
 .DS_Store
+pg-vt-tiler
 
 # Test binary, build with `go test -c`
 *.test

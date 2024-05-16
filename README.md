@@ -8,17 +8,7 @@ It can read geometry column from specified table, and generate vector tile, and 
 
 Download the binary file from [release page](https://github.com/QingyaFan/pg-vt-tiler/releases).
 
-> wget -O tiller https://github.com/QingyaFan/pg-vt-tiler/releases/download/v0.1.2/tiller-linux-amd64-v0.1.2
-
-Then you make it executable.
-
-> chmod +x tiller
-
-Now, you can use it by `./tiller [options]`. You can of course move the binary to `/usr/local/bin`: `mv tiller /usr/local/bin`, then you can use it directly by: `tiller [options]`.
-
-## Options
-
-You can see it's usage by `tiller -h`:
+You can see it's options by `tiler -h`:
 
 ```txt
 Usage:
@@ -27,12 +17,14 @@ Usage:
 Flags:
   -c, --concurrency int    (default 10)
   -d, --dsn string        database connection info, format: "host=localhost port=5432 user=postgres password=postgres dbname=db_name sslmode=ssl_mode", required.
-  -e, --end int            (default 7)
+  -t, --table string
   -g, --geom string
-  -h, --help              help for pg-vt-tiler
   -l, --location string    (default ".")
   -s, --start int          (default 7)
-  -t, --table string
+  -e, --end int            (default 7)
+  -h, --help              help for pg-vt-tiler
 ```
 
-Enjoy and suggestions are welcome.
+## Linux
+
+In linux, you can move the binary to `/usr/local/bin`: `mv tiler /usr/local/bin`, then you can use it directly by: `tiler [options]`.
