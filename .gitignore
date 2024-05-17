@@ -7,6 +7,7 @@
 .DS_Store
 pg-vt-tiler
 data
+bin
 
 # Test binary, build with `go test -c`
 *.test
